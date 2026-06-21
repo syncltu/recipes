@@ -1,0 +1,47 @@
+name: Deploy To VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Copy app files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: ".dockerignore,docker,frontend,mealie,pyproject.toml,uv.lock"
+          target: ${{ secrets.VPS_APP_DIR }}
+
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            mkdir -p ${{ secrets.VPS_APP_DIR }}
+            cd ${{ secrets.VPS_APP_DIR }}
+
+            cat <<'EOF' > .env
+            ${{ secrets.MEALIE_ENV_FILE }}
+            EOF
+
+            docker compose -f docker/docker-compose.yml --env-file .env up --build -d
+            docker image prune -f
