@@ -29,14 +29,14 @@ export default defineNuxtConfig({
     baseURL: process.env.SUB_PATH || "/",
 
     head: {
-      title: "Mealie",
+      title: "Gabelės receptai",
       meta: [
         { property: "og:type", content: "website" },
-        { property: "og:title", content: "Mealie" },
-        { property: "og:site_name", content: "Mealie" },
+        { property: "og:title", content: "Gabelės receptai" },
+        { property: "og:site_name", content: "Gabelės receptai" },
         {
           property: "og:description",
-          content: "Mealie is a recipe management app for your kitchen.",
+          content: "Gabelės receptai is a recipe management app for your kitchen.",
         },
         {
           property: "og:image",
@@ -47,7 +47,7 @@ export default defineNuxtConfig({
         { name: "viewport", content: "width=device-width, initial-scale=1" },
         {
           name: "description",
-          content: "Mealie is a recipe management app for your kitchen.",
+          content: "Gabelės receptai is a recipe management app for your kitchen.",
         },
       ],
       script: [

@@ -20,7 +20,7 @@
           dark
         >
           <v-toolbar-title class="text-h4 text-center">
-            Mealie
+            Gabelės receptai
           </v-toolbar-title>
         </v-toolbar>
         <AppLogo />

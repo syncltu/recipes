@@ -43,5 +43,6 @@ jobs:
             ${{ secrets.MEALIE_ENV_FILE }}
             EOF
 
+            docker compose -f docker/docker-compose.yml --env-file .env down --remove-orphans
             docker compose -f docker/docker-compose.yml --env-file .env up --build -d
             docker image prune -f
