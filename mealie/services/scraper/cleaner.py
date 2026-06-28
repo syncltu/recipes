@@ -35,6 +35,12 @@ MATCH_MULTI_SPACE = re.compile(r" +")
 MATCH_ERRONEOUS_WHITE_SPACE = re.compile(r"\n\s*\n")
 """ Matches multiple new lines and removes erroneous white space """
 
+MATCH_NUMBERED_STEP = re.compile(r"(?<![.\d])\d+[.]\s+(?!\d)|\d+[)]\s+")
+""" Matches numbered step markers like '1. ' or '1) ' but not decimal numbers like '2.5' """
+
+MATCH_BLOCK_ELEMENT_CLOSE = re.compile(r"</(?:div|li|section|article|tr|td)>|<br\s*/?>", re.IGNORECASE)
+""" Matches closing tags of block-level HTML elements and self-closing <br> tags """
+
 
 def clean(recipe_data: Recipe | dict, translator: Translator, url=None) -> Recipe:
     """Main entrypoint to clean a recipe extracted from the web
@@ -75,12 +81,18 @@ def clean(recipe_data: Recipe | dict, translator: Translator, url=None) -> Recip
     return Recipe(**recipe_data)
 
 
-def clean_string(text: str | list | int | float) -> str:
-    """Cleans a string of HTML tags and extra white space"""
+def clean_string(text: str | list | int | float, convert_block_elements: bool = False) -> str:
+    """Cleans a string of HTML tags and extra white space.
+
+    Args:
+        convert_block_elements: When True, closing tags of block-level elements (div, li, br, etc.)
+            are converted to newlines before stripping all HTML. Useful for instruction text where
+            div/li boundaries should become step separators.
+    """
     if not isinstance(text, str):
         if isinstance(text, list):
             if text:
-                return clean_string(text[0])
+                return clean_string(text[0], convert_block_elements=convert_block_elements)
             else:
                 text = ""
         elif text is None:
@@ -94,6 +106,9 @@ def clean_string(text: str | list | int | float) -> str:
     text = typing.cast(str, text)  # at this point we know text is a string
 
     cleaned_text = html.unescape(text)
+    if convert_block_elements:
+        cleaned_text = MATCH_BLOCK_ELEMENT_CLOSE.sub("\n", cleaned_text)
+        cleaned_text = re.sub(r"</p>", "\n", cleaned_text, flags=re.IGNORECASE)
     cleaned_text = MATCH_HTML_TAGS.sub("", cleaned_text)
     cleaned_text = MATCH_MULTI_SPACE.sub(" ", cleaned_text)
     cleaned_text = MATCH_ERRONEOUS_WHITE_SPACE.sub("\n\n", cleaned_text)
@@ -193,11 +208,17 @@ def clean_instructions(steps_object: list | dict | str, default: list | None = N
                     return clean_instructions(json.loads(step_as_str))
                 except json.JSONDecodeError:
                     pass
-            return [
-                {"text": _sanitize_instruction_text(instruction)}
-                for instruction in step_as_str.splitlines()
-                if instruction.strip()
-            ]
+            # Convert block-level HTML closing tags (</div>, </li>, <br>, etc.) to newlines
+            # before splitting, so sites using div/li-based step layouts are split correctly
+            processed = clean_string(step_as_str, convert_block_elements=True)
+            lines = [line for line in processed.splitlines() if line.strip()]
+            # If only a single line, check whether it contains numbered steps like "1. " or "1) "
+            # that weren't separated by newlines on the source website
+            if len(lines) <= 1:
+                parts = [p.strip() for p in MATCH_NUMBERED_STEP.split(processed) if p.strip()]
+                if len(parts) >= 2:
+                    lines = parts
+            return [{"text": _sanitize_instruction_text(instruction)} for instruction in lines]
         case [str(), *_]:
             # Assume list of strings is a valid list of instructions
             #
@@ -253,7 +274,7 @@ def _sanitize_instruction_text(line: str | dict) -> str:
         return ""
 
     line = typing.cast(str, line)
-    clean_line = clean_string(line.strip())
+    clean_line = clean_string(line.strip(), convert_block_elements=True)
 
     while not clean_line == (clean_line := clean_string(clean_line)):
         pass
