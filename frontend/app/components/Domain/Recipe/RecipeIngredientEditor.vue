@@ -23,7 +23,7 @@
         class="flex-grow-0 flex-shrink-0"
       >
         <v-number-input
-          v-model="model.quantity"
+          :model-value="normalizedQuantity"
           variant="solo"
           :precision="null"
           :min="0"
@@ -32,6 +32,7 @@
           inset
           density="compact"
           :placeholder="$t('recipe.quantity')"
+          @update:model-value="onQuantityUpdate"
           @keypress="quantityFilter"
         >
           <template v-if="enableDragHandle" #prepend>
@@ -386,6 +387,8 @@ const showCreateUnit = computed(() =>
   && !filteredUnits.value.some((u: any) => (u.name ?? "").toLowerCase() === unitSearch.value.toLowerCase()),
 );
 
+const normalizedQuantity = computed(() => normalizeQuantity(model.value.quantity));
+
 async function createAssignUnit() {
   unitsData.data.name = unitSearch.value;
   model.value.unit = await unitStore.actions.createOne(unitsData.data) || undefined;
@@ -429,6 +432,19 @@ function handleFoodEnter() {
   ) {
     createAssignFood();
   }
+}
+
+function normalizeQuantity(quantity: unknown): number | null {
+  if (quantity === null || quantity === undefined || quantity === "") {
+    return null;
+  }
+
+  const numericQuantity = typeof quantity === "number" ? quantity : Number(quantity);
+  return Number.isFinite(numericQuantity) ? numericQuantity : null;
+}
+
+function onQuantityUpdate(value: unknown) {
+  model.value.quantity = normalizeQuantity(value);
 }
 
 function quantityFilter(e: KeyboardEvent) {
