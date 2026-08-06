@@ -244,6 +244,34 @@ instruction_test_cases = (
         input="Instruction A\r\nInstruction B\r\nInstruction C\r\n",
         expected=None,
     ),
+    CleanerCase(
+        test_id="single plain string remains one step",
+        input="Mix everything together until smooth.",
+        expected=[{"text": "Mix everything together until smooth."}],
+    ),
+    CleanerCase(
+        test_id="numbered compact string",
+        input="1. Mix everything together.2. Bake for 30 minutes.3. Let cool before serving.",
+        expected=[
+            {"text": "Mix everything together."},
+            {"text": "Bake for 30 minutes."},
+            {"text": "Let cool before serving."},
+        ],
+    ),
+    CleanerCase(
+        test_id="numbered compact string with decimals",
+        input="1. Add 2.5 cups flour.2. Rest for 30 minutes.3. Serve.",
+        expected=[
+            {"text": "Add 2.5 cups flour."},
+            {"text": "Rest for 30 minutes."},
+            {"text": "Serve."},
+        ],
+    ),
+    CleanerCase(
+        test_id="non-sequential compact numbering stays whole",
+        input="1. Mix everything together.3. Bake for 30 minutes.",
+        expected=[{"text": "1. Mix everything together.3. Bake for 30 minutes."}],
+    ),
 )
 
 
@@ -251,7 +279,7 @@ instruction_test_cases = (
 def test_cleaner_instructions(instructions: CleanerCase):
     reuslt = cleaner.clean_instructions(instructions.input)
 
-    expected = [
+    expected = instructions.expected or [
         {"text": "Instruction A"},
         {"text": "Instruction B"},
         {"text": "Instruction C"},

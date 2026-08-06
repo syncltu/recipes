@@ -35,8 +35,8 @@ MATCH_MULTI_SPACE = re.compile(r" +")
 MATCH_ERRONEOUS_WHITE_SPACE = re.compile(r"\n\s*\n")
 """ Matches multiple new lines and removes erroneous white space """
 
-MATCH_NUMBERED_STEP = re.compile(r"(?<![.\d])\d+[.]\s+(?!\d)|\d+[)]\s+")
-""" Matches numbered step markers like '1. ' or '1) ' but not decimal numbers like '2.5' """
+MATCH_NUMBERED_STEP = re.compile(r"(?:^|(?<=[\s.!?]))\s*(?P<number>\d+)[.)]\s+")
+""" Matches numbered step markers like '1. ' or '1) ' including compact '.2. ' website formats. """
 
 MATCH_BLOCK_ELEMENT_CLOSE = re.compile(r"</(?:div|li|section|article|tr|td)>|<br\s*/?>", re.IGNORECASE)
 """ Matches closing tags of block-level HTML elements and self-closing <br> tags """
@@ -215,7 +215,7 @@ def clean_instructions(steps_object: list | dict | str, default: list | None = N
             # If only a single line, check whether it contains numbered steps like "1. " or "1) "
             # that weren't separated by newlines on the source website
             if len(lines) <= 1:
-                parts = [p.strip() for p in MATCH_NUMBERED_STEP.split(processed) if p.strip()]
+                parts = _split_numbered_steps(processed)
                 if len(parts) >= 2:
                     lines = parts
             return [{"text": _sanitize_instruction_text(instruction)} for instruction in lines]
@@ -251,6 +251,27 @@ def clean_instructions(steps_object: list | dict | str, default: list | None = N
             )
         case _:
             raise TypeError(f"Unexpected type for instructions: {type(steps_object)}, {steps_object}")
+
+
+def _split_numbered_steps(text: str) -> list[str]:
+    """Split compact numbered instructions while avoiding false positives on plain prose."""
+    matches = list(MATCH_NUMBERED_STEP.finditer(text))
+    if len(matches) < 2:
+        return []
+
+    numbers = [int(match.group("number")) for match in matches]
+    if numbers != list(range(1, len(numbers) + 1)):
+        return []
+
+    steps: list[str] = []
+    for idx, match in enumerate(matches):
+        start = match.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+        step = text[start:end].strip()
+        if step:
+            steps.append(step)
+
+    return steps
 
 
 def _sanitize_instruction_text(line: str | dict) -> str:

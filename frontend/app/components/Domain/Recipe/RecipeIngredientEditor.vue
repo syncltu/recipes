@@ -23,7 +23,7 @@
         class="flex-grow-0 flex-shrink-0"
       >
         <v-number-input
-          :model-value="normalizedQuantity"
+          v-model="quantityModel"
           variant="solo"
           :precision="null"
           :min="0"
@@ -32,7 +32,6 @@
           inset
           density="compact"
           :placeholder="$t('recipe.quantity')"
-          @update:model-value="onQuantityUpdate"
           @keypress="quantityFilter"
         >
           <template v-if="enableDragHandle" #prepend>
@@ -347,7 +346,7 @@ const { search: foodSearch, filtered: filteredFoods } = useSearch(foodStore.stor
 
 const showCreateFood = computed(() =>
   !!foodSearch.value
-  && !filteredFoods.value.some((f: any) => (f.name ?? "").toLowerCase() === foodSearch.value.toLowerCase()),
+  && !filteredFoods.value.some(food => itemMatchesSearch(food, foodSearch.value)),
 );
 
 async function createAssignFood() {
@@ -384,10 +383,13 @@ const { search: unitSearch, filtered: filteredUnits } = useSearch(unitStore.stor
 
 const showCreateUnit = computed(() =>
   !!unitSearch.value
-  && !filteredUnits.value.some((u: any) => (u.name ?? "").toLowerCase() === unitSearch.value.toLowerCase()),
+  && !filteredUnits.value.some(unit => itemMatchesSearch(unit, unitSearch.value)),
 );
 
-const normalizedQuantity = computed(() => normalizeQuantity(model.value.quantity));
+const quantityModel = computed<number | null>({
+  get: () => normalizeQuantity(model.value.quantity),
+  set: value => model.value.quantity = normalizeQuantity(value),
+});
 
 async function createAssignUnit() {
   unitsData.data.name = unitSearch.value;
@@ -415,23 +417,125 @@ function toggleIsRecipe() {
 }
 
 function handleUnitEnter() {
-  if (
-    model.value.unit === undefined
-    || model.value.unit === null
-    || !model.value.unit.name.includes(unitSearch.value)
-  ) {
-    createAssignUnit();
+  if (itemMatchesSearch(model.value.unit, unitSearch.value)) {
+    return;
   }
+
+  const matchingUnit = filteredUnits.value.find(unit => itemMatchesSearch(unit, unitSearch.value));
+
+  if (matchingUnit) {
+    model.value.unit = matchingUnit;
+    return;
+  }
+
+  createAssignUnit();
 }
 
 function handleFoodEnter() {
-  if (
-    model.value.food === undefined
-    || model.value.food === null
-    || !model.value.food.name.includes(foodSearch.value)
-  ) {
-    createAssignFood();
+  if (itemMatchesSearch(model.value.food, foodSearch.value)) {
+    return;
   }
+
+  const matchingFood = filteredFoods.value.find(food => itemMatchesSearch(food, foodSearch.value));
+
+  if (matchingFood) {
+    model.value.food = matchingFood;
+    return;
+  }
+
+  createAssignFood();
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function tokenVariants(token: string) {
+  const suffixes = [
+    "iams",
+    "iaus",
+    "iui",
+    "uose",
+    "iems",
+    "ium",
+    "ius",
+    "ias",
+    "ais",
+    "ams",
+    "ums",
+    "es",
+    "is",
+    "ys",
+    "us",
+    "as",
+    "ai",
+    "ia",
+    "iu",
+    "ei",
+    "e",
+    "a",
+    "o",
+    "u",
+  ];
+
+  const variants = new Set([token]);
+
+  for (const suffix of suffixes) {
+    if (token.length > suffix.length + 1 && token.endsWith(suffix)) {
+      variants.add(token.slice(0, -suffix.length));
+    }
+  }
+
+  return [...variants];
+}
+
+function textTokens(value: string) {
+  const normalized = normalizeSearchText(value);
+  return normalized ? normalized.split(/\s+/).filter(Boolean) : [];
+}
+
+function tokenMatches(searchToken: string, candidateToken: string) {
+  const searchVariants = tokenVariants(searchToken);
+  const candidateVariants = tokenVariants(candidateToken);
+
+  return searchVariants.some(searchVariant => candidateVariants.some((candidateVariant) => {
+    return searchVariant === candidateVariant
+      || searchVariant.startsWith(candidateVariant)
+      || candidateVariant.startsWith(searchVariant);
+  }));
+}
+
+function itemMatchesSearch(
+  item: { name?: string | null; pluralName?: string | null; abbreviation?: string | null; pluralAbbreviation?: string | null; aliases?: Array<{ name: string }> | null } | null | undefined,
+  searchValue: string,
+) {
+  if (!item || !searchValue) {
+    return false;
+  }
+
+  const candidateText = [
+    item.name,
+    item.pluralName,
+    item.abbreviation,
+    item.pluralAbbreviation,
+    ...(item.aliases?.map(alias => alias.name) ?? []),
+  ]
+    .filter((value): value is string => !!value)
+    .join(" ");
+
+  const candidateTokens = textTokens(candidateText);
+  const searchTokens = textTokens(searchValue);
+
+  if (!candidateTokens.length || !searchTokens.length) {
+    return false;
+  }
+
+  return searchTokens.every(searchToken => candidateTokens.some(candidateToken => tokenMatches(searchToken, candidateToken)));
 }
 
 function normalizeQuantity(quantity: unknown): number | null {
@@ -441,10 +545,6 @@ function normalizeQuantity(quantity: unknown): number | null {
 
   const numericQuantity = typeof quantity === "number" ? quantity : Number(quantity);
   return Number.isFinite(numericQuantity) ? numericQuantity : null;
-}
-
-function onQuantityUpdate(value: unknown) {
-  model.value.quantity = normalizeQuantity(value);
 }
 
 function quantityFilter(e: KeyboardEvent) {
