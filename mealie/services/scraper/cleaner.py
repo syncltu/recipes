@@ -250,7 +250,7 @@ def clean_instructions(steps_object: list | dict | str, default: list | None = N
                 )
             )
         case _:
-            raise TypeError(f"Unexpected type for instructions: {type(steps_object)}, {steps_object}")
+            raise TypeError(f"Unexpected type for instructions:{type(steps_object)}, {steps_object}")
 
 
 def _split_numbered_steps(text: str) -> list[str]:
