@@ -1,6 +1,7 @@
 import { ref, computed } from "vue";
 import type { UserOut } from "~/lib/api/types/user";
 import { clearAllStores } from "~/composables/store";
+import { clearRefreshToken, readRefreshToken, writeRefreshToken } from "~/composables/use-refresh-token";
 import { getTokenCookieOptions } from "~/composables/use-token-cookie";
 
 interface AuthData {
@@ -35,6 +36,13 @@ export const useAuthBackend = function (): AuthState {
 
   function setToken(token: string | null) {
     tokenCookie.value = token;
+
+    if (token) {
+      writeRefreshToken(token);
+    }
+    else {
+      clearRefreshToken();
+    }
   }
 
   function handleAuthError(error: any, redirect = false) {
@@ -50,6 +58,11 @@ export const useAuthBackend = function (): AuthState {
   }
 
   async function getSession(): Promise<void> {
+    const storedRefreshToken = readRefreshToken();
+    if (!tokenCookie.value && storedRefreshToken) {
+      tokenCookie.value = storedRefreshToken;
+    }
+
     if (!tokenCookie.value) {
       authUser.value = null;
       authStatus.value = "unauthenticated";
@@ -113,6 +126,11 @@ export const useAuthBackend = function (): AuthState {
   }
 
   async function refresh(): Promise<void> {
+    const storedRefreshToken = readRefreshToken();
+    if (!tokenCookie.value && storedRefreshToken) {
+      tokenCookie.value = storedRefreshToken;
+    }
+
     if (!tokenCookie.value) return;
 
     try {

@@ -215,6 +215,7 @@ import { useDark, useSessionStorage, whenever } from "@vueuse/core";
 import { useLoggedInState } from "~/composables/use-logged-in-state";
 import { usePasswordField } from "~/composables/use-passwords";
 import { alert } from "~/composables/use-toast";
+import { readRefreshToken } from "~/composables/use-refresh-token";
 import { useAsyncKey } from "~/composables/use-utils";
 import type { AppStartupInfo } from "~/lib/api/types/admin";
 import { useUserActivityPreferences } from "~/composables/use-users/preferences";
@@ -309,6 +310,17 @@ whenever(
 onBeforeMount(async () => {
   if (isCallback()) {
     await oidcAuthenticate(true);
+  }
+});
+
+onMounted(async () => {
+  if (!loggedIn.value && readRefreshToken()) {
+    try {
+      await auth.refresh();
+    }
+    catch (error) {
+      console.warn("Auto-login refresh failed:", error);
+    }
   }
 });
 
